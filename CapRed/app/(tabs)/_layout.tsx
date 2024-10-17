@@ -50,6 +50,15 @@ export default function TabLayout() {
           ),
         }}
       />
+           <Tabs.Screen
+        name="sensor"
+        options={{
+          title: 'Sensors',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'bluetooth': 'bluetooth-sharp'} color={color} />
+          ),
+        }}
+      />
     </Tabs>
     
   );
