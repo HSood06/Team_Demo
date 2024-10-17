@@ -32,6 +32,25 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'profile',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'person-outline': 'person'} color={color} />
+          ),
+        }}
+      />
+        <Tabs.Screen
+        name="docprofile"
+        options={{
+          title: 'docprofile',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'person-outline': 'person'} color={color} />
+          ),
+        }}
+      />
     </Tabs>
+    
   );
 }
