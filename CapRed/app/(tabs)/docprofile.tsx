@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, updateDoc, query, where, getDocs } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, query, where, getDocs, collection } from 'firebase/firestore';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
 // Replace with your actual Firebase configuration
@@ -36,31 +36,27 @@ const DocProfile: React.FC<DocProfileProps> = ({ userId }) => {
     phoneNumber: '',
     address: '',
   });
-
   const [isEditMode, setIsEditMode] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [emailError, setEmailError] = useState('');
   const [phoneError, setPhoneError] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
         const docRef = doc(db, 'users', userId);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          const data = docSnap.data();
-          setUserData({
-            patientID: data.patientID || '',
-            name: data.name || '',
-            email: data.email || '',
-            phoneNumber: data.phoneNumber || '',
-            address: data.address || '',
-          } as UserData);
+          setUserData(docSnap.data() as UserData);
         } else {
           console.log('No such document!');
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
         Alert.alert('Error', 'Failed to fetch user data');
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -74,24 +70,15 @@ const DocProfile: React.FC<DocProfileProps> = ({ userId }) => {
     if (field === 'phoneNumber') setPhoneError('');
   };
 
-  const isEmailValid = (email: string) => {
-    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailPattern.test(email);
-  };
+  const isEmailValid = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   const checkEmailInUse = async (email: string) => {
-    const q = query(
-      collection(db, 'users'),
-      where('email', '==', email)
-    );
+    const q = query(collection(db, 'users'), where('email', '==', email));
     const querySnapshot = await getDocs(q);
-    return !querySnapshot.empty; // Returns true if email is already in use
+    return !querySnapshot.empty;
   };
 
-  const isPhoneNumberValid = (phone: string) => {
-    const phonePattern = /^\(?([0-9]{3})\)?[-. ]?([0-9]{3})[-. ]?([0-9]{4})$/;
-    return phonePattern.test(phone);
-  };
+  const isPhoneNumberValid = (phone: string) => /^\(?([0-9]{3})\)?[-. ]?([0-9]{3})[-. ]?([0-9]{4})$/.test(phone);
 
   const handleSave = async () => {
     if (!isEmailValid(userData.email || '')) {
@@ -111,30 +98,18 @@ const DocProfile: React.FC<DocProfileProps> = ({ userId }) => {
 
     try {
       const docRef = doc(db, 'users', userId);
-      await updateDoc(docRef, {
-        name: userData.name,
-        email: userData.email,
-        phoneNumber: userData.phoneNumber,
-        address: userData.address,
-      });
+      await updateDoc(docRef, userData);
       Alert.alert('Success', 'Data updated successfully!');
       setIsEditMode(false);
-      const updatedDocSnap = await getDoc(docRef);
-      if (updatedDocSnap.exists()) {
-        const updatedData = updatedDocSnap.data();
-        setUserData({
-          patientID: updatedData.patientID || '',
-          name: updatedData.name || '',
-          email: updatedData.email || '',
-          phoneNumber: updatedData.phoneNumber || '',
-          address: updatedData.address || '',
-        } as UserData);
-      }
     } catch (error) {
       console.error('Error saving user data:', error);
       Alert.alert('Error', 'Failed to save user data');
     }
   };
+
+  if (loading) {
+    return <ActivityIndicator size="large" color="#6A0CAD" />;
+  }
 
   return (
     <View style={styles.container}>
