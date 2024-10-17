@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Linking } from 'react-native';
+import {
+    View,
+    Text,
+    TouchableOpacity,
+    StyleSheet,
+    Alert,
+    ActivityIndicator,
+    Linking,
+} from 'react-native';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { PermissionsAndroid, Platform } from 'react-native';
+import * as Location from 'expo-location';
 
 // Replace with your actual Firebase configuration
 const firebaseConfig = {
@@ -47,16 +55,16 @@ const Sensors: React.FC = () => {
     };
 
     const handleAddSensor = async () => {
-        if (Platform.OS === 'android') {
-            const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.BLUETOOTH);
-            if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-                Alert.alert('Permission denied', 'Bluetooth permission is required to pair sensors.');
-                return;
-            }
+        // Request location permission as it is necessary for Bluetooth operations
+        const { status } = await Location.requestForegroundPermissionsAsync();
+
+        if (status !== 'granted') {
+            Alert.alert('Permission denied', 'Location permission is required to use Bluetooth scanning.');
+            return;
         }
 
-        // Open Bluetooth settings
-        Linking.openSettings(); // This will open the Bluetooth settings
+        // Open Bluetooth settings (this will open the app settings)
+        Linking.openSettings();
     };
 
     const handleForgetSensor = async (sensorId: string) => {
@@ -71,7 +79,6 @@ const Sensors: React.FC = () => {
     };
 
     const handleRefresh = () => {
-        // Implement your refresh logic here (e.g., re-scanning for devices)
         Alert.alert('Refresh', 'Re-scanning for Bluetooth devices is not implemented.');
     };
 

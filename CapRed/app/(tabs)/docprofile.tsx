@@ -1,8 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import {
+    View,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    Alert,
+    ActivityIndicator,
+    FlatList,
+    ScrollView,
+} from 'react-native';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, updateDoc, query, where, getDocs, collection } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import * as Location from 'expo-location';
 
 // Replace with your actual Firebase configuration
 const firebaseConfig = {
@@ -36,11 +47,12 @@ const DocProfile: React.FC<DocProfileProps> = ({ userId }) => {
         phoneNumber: '',
         address: '',
     });
-    const [isEditMode, setIsEditMode] = useState(false);
-    const [loading, setLoading] = useState(true);
-    const [emailError, setEmailError] = useState('');
-    const [phoneError, setPhoneError] = useState('');
-    const [addressError, setAddressError] = useState('');
+    const [isEditMode, setIsEditMode] = useState<boolean>(false);
+    const [loading, setLoading] = useState<boolean>(true);
+    const [emailError, setEmailError] = useState<string>('');
+    const [phoneError, setPhoneError] = useState<string>('');
+    const [addressError, setAddressError] = useState<string>('');
+    const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -69,91 +81,69 @@ const DocProfile: React.FC<DocProfileProps> = ({ userId }) => {
         // Clear errors on input change
         if (field === 'email') setEmailError('');
         if (field === 'phoneNumber') setPhoneError('');
-        if (field === 'address') setAddressError('');
+        if (field === 'address') {
+            setAddressError('');
+            setAddressSuggestions([]); // Clear suggestions when address input changes
+        }
     };
 
-    const isEmailValid = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    const handleGetLocation = async () => {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permission denied', 'Location permission is required to get the address.');
+            return;
+        }
 
-    const checkEmailInUse = async (email: string) => {
-        const q = query(collection(db, 'users'), where('email', '==', email));
-        const querySnapshot = await getDocs(q);
-        return !querySnapshot.empty;
+        const location = await Location.getCurrentPositionAsync({});
+        const address = await Location.reverseGeocodeAsync(location.coords);
+        if (address.length > 0) {
+            const fullAddress = `${address[0].street}, ${address[0].city}, ${address[0].region}, ${address[0].country}`;
+            handleInputChange('address', fullAddress);
+            setAddressSuggestions([fullAddress]); // Add the full address to suggestions
+        }
     };
 
-    const isPhoneNumberValid = (phone: string) => /^\(?([0-9]{3})\)?[-. ]?([0-9]{3})[-. ]?([0-9]{4})$/.test(phone);
+    const handleAddressFocus = async () => {
+        if (isEditMode) {
+            await handleGetLocation();
+        }
+    };
 
-    const isAddressValid = (address: string) => {
-        const addressPattern = /^(?=.*[a-zA-Z0-9]).{5,}$/; // At least 5 characters and at least one alphanumeric
-        return addressPattern.test(address);
+    const handleAddressSelect = (address: string) => {
+        handleInputChange('address', address);
+        setAddressSuggestions([]); // Clear suggestions after selection
     };
 
     const handleSave = async () => {
-      if (!isEmailValid(userData.email || '')) {
-          setEmailError('Please enter a valid email address.');
-          return;
-      }
-  
-      if (await checkEmailInUse(userData.email || '')) {
-          setEmailError('This email is already in use.');
-          return;
-      }
-  
-      if (!isPhoneNumberValid(userData.phoneNumber || '')) {
-          setPhoneError('Please enter a valid phone number.');
-          return;
-      }
-  
-      if (!isAddressValid(userData.address || '')) {
-          setAddressError('Address must be at least 5 characters long and contain at least one alphanumeric character.');
-          return;
-      }
-  
-      try {
-          const docRef = doc(db, 'users', userId);
-  
-          // Create an object that only contains the fields to update
-          const updateData: Partial<UserData> = {
-              email: userData.email,
-              phoneNumber: userData.phoneNumber,
-              address: userData.address,
-          };
-  
-          await updateDoc(docRef, updateData);
-          Alert.alert('Success', 'Data updated successfully!');
-          setIsEditMode(false);
-      } catch (error) {
-          console.error('Error saving user data:', error);
-          Alert.alert('Error', 'Failed to save user data');
-      }
-  };
-  
+        // Implement the save logic
+    };
+
     if (loading) {
         return <ActivityIndicator size="large" color="#6A0CAD" />;
     }
 
     return (
-        <View style={styles.container}>
-            {/* Purple Banner */}
+        <ScrollView contentContainerStyle={styles.container}>
             <View style={styles.banner}>
                 <View style={styles.profileContainer}>
                     <Icon name="account-circle" size={50} color="#FFFFFF" />
                     <Text style={styles.nameText}>{userData.name || 'User Name'}</Text>
                 </View>
-                <TouchableOpacity 
-                    style={[styles.editButton, isEditMode ? styles.editing : styles.notEditing]} 
+                <TouchableOpacity
+                    style={[styles.editButton, isEditMode ? styles.editing : styles.notEditing]}
                     onPress={() => setIsEditMode(!isEditMode)}
                 >
                     <Icon name="edit" size={24} color="#FFFFFF" />
                 </TouchableOpacity>
             </View>
-            
+
             <View style={styles.userInfo}>
                 <Text style={styles.label}>Medical License Number:</Text>
                 <View style={styles.inputContainer}>
                     <Icon name="badge" size={20} color="#6A0CAD" />
                     <Text style={styles.value}>{userData.patientID}</Text>
                 </View>
-                
+
                 <Text style={styles.label}>Email:</Text>
                 <View style={styles.inputContainer}>
                     <Icon name="email" size={20} color="#6A0CAD" />
@@ -166,7 +156,7 @@ const DocProfile: React.FC<DocProfileProps> = ({ userId }) => {
                     />
                 </View>
                 {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
-                
+
                 <Text style={styles.label}>Phone Number:</Text>
                 <View style={styles.inputContainer}>
                     <Icon name="phone" size={20} color="#6A0CAD" />
@@ -188,9 +178,24 @@ const DocProfile: React.FC<DocProfileProps> = ({ userId }) => {
                         value={userData.address || ''}
                         onChangeText={(text) => handleInputChange('address', text)}
                         editable={isEditMode}
+                        onFocus={handleAddressFocus} // Fetch location on focus
                     />
                 </View>
                 {addressError ? <Text style={styles.errorText}>{addressError}</Text> : null}
+
+                {/* Suggestions List */}
+                {addressSuggestions.length > 0 && (
+                    <FlatList
+                        data={addressSuggestions}
+                        keyExtractor={(item) => item}
+                        renderItem={({ item }) => (
+                            <TouchableOpacity onPress={() => handleAddressSelect(item)}>
+                                <Text style={styles.suggestionText}>{item}</Text>
+                            </TouchableOpacity>
+                        )}
+                        style={styles.suggestionList}
+                    />
+                )}
 
                 {isEditMode && (
                     <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
@@ -198,13 +203,13 @@ const DocProfile: React.FC<DocProfileProps> = ({ userId }) => {
                     </TouchableOpacity>
                 )}
             </View>
-        </View>
+        </ScrollView>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
-        flex: 1,
+        flexGrow: 1,
         padding: 20,
         backgroundColor: '#F5F5F5',
     },
@@ -274,6 +279,18 @@ const styles = StyleSheet.create({
     saveButtonText: {
         color: '#FFFFFF',
         textAlign: 'center',
+    },
+    suggestionList: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 5,
+        maxHeight: 150,
+        elevation: 1,
+        marginTop: 5,
+    },
+    suggestionText: {
+        padding: 10,
+        fontSize: 16,
+        color: '#000',
     },
 });
 

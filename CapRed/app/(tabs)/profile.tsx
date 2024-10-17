@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, FlatList } from 'react-native';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import * as Location from 'expo-location';
 
 // Replace with your actual Firebase configuration
 const firebaseConfig = {
@@ -40,14 +41,13 @@ const MyProfile: React.FC<MyProfileProps> = ({ userId }) => {
         phoneNumber: '',
         address: '',
     });
-
     const [isEditMode, setIsEditMode] = useState(false);
     const [emailError, setEmailError] = useState('');
     const [phoneError, setPhoneError] = useState('');
     const [weightError, setWeightError] = useState('');
     const [heightError, setHeightError] = useState('');
     const [addressError, setAddressError] = useState('');
-    const [isImperial, setIsImperial] = useState(false);
+    const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -83,7 +83,37 @@ const MyProfile: React.FC<MyProfileProps> = ({ userId }) => {
         if (field === 'phoneNumber') setPhoneError('');
         if (field === 'weight') setWeightError('');
         if (field === 'height') setHeightError('');
-        if (field === 'address') setAddressError('');
+        if (field === 'address') {
+            setAddressError('');
+            setAddressSuggestions([]) // Clear suggestions on input change
+        }
+    };
+
+    const handleGetLocation = async () => {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permission denied', 'Location permission is required to get the address.');
+            return;
+        }
+
+        const location = await Location.getCurrentPositionAsync({});
+        const address = await Location.reverseGeocodeAsync(location.coords);
+        if (address.length > 0) {
+            const fullAddress = `${address[0].street}, ${address[0].city}, ${address[0].region}, ${address[0].country}`;
+            handleInputChange('address', fullAddress);
+            setAddressSuggestions([fullAddress]); // Add the full address to suggestions
+        }
+    };
+
+    const handleAddressFocus = async () => {
+        if (isEditMode) {
+            await handleGetLocation();
+        }
+    };
+
+    const handleAddressSelect = (address: string) => {
+        handleInputChange('address', address);
+        setAddressSuggestions([]); // Clear suggestions after selection
     };
 
     const isEmailValid = (email: string) => {
@@ -162,45 +192,6 @@ const MyProfile: React.FC<MyProfileProps> = ({ userId }) => {
         }
     };
 
-    const convertMetrics = () => {
-        const weightInKg = parseFloat(userData.weight || '0');
-        const heightInCm = parseFloat(userData.height || '0');
-    
-        if (isImperial) {
-            // If currently in imperial mode, convert to metric
-            if (!isNaN(weightInKg)) {
-                setUserData(prevState => ({
-                    ...prevState,
-                    weight: ((weightInKg / 2.20462).toFixed(2)).toString(), // Convert lbs to kg
-                }));
-            }
-            if (!isNaN(heightInCm)) {
-                setUserData(prevState => ({
-                    ...prevState,
-                    height: ((heightInCm * 2.54).toFixed(2)).toString(), // Convert inches to cm
-                }));
-            }
-            Alert.alert('Conversion', 'Converted to Metric units.');
-        } else {
-            // If currently in metric mode, convert to imperial
-            if (!isNaN(weightInKg)) {
-                setUserData(prevState => ({
-                    ...prevState,
-                    weight: ((weightInKg * 2.20462).toFixed(2)).toString(), // Convert kg to lbs
-                }));
-            }
-            if (!isNaN(heightInCm)) {
-                setUserData(prevState => ({
-                    ...prevState,
-                    height: ((heightInCm / 2.54).toFixed(2)).toString(), // Convert cm to inches
-                }));
-            }
-            Alert.alert('Conversion', 'Converted to Imperial units.');
-        }
-        setIsImperial(!isImperial); // Toggle the unit system
-    };
-    
-
     return (
         <ScrollView style={styles.container}>
             <View style={styles.banner}>
@@ -249,37 +240,31 @@ const MyProfile: React.FC<MyProfileProps> = ({ userId }) => {
                 </View>
                 {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
 
-                <View>
-                    <Text style={styles.label}>Weight ({isImperial ? 'Lbs' : 'Kg'}):</Text>
-                    <View style={styles.inputContainer}>
-                        <Icon name="fitness-center" size={20} color="#6A0CAD" />
-                        <TextInput
-                            style={styles.input}
-                            value={userData.weight || ''}
-                            onChangeText={(text) => handleInputChange('weight', text)}
-                            keyboardType="numeric"
-                            editable={isEditMode}
-                        />
-                    </View>
-                    {weightError ? <Text style={styles.errorText}>{weightError}</Text> : null}
-
-                    <Text style={styles.label}>Height ({isImperial ? 'Inches' : 'Cm'}):</Text>
-                    <View style={styles.inputContainer}>
-                        <Icon name="height" size={20} color="#6A0CAD" />
-                        <TextInput
-                            style={styles.input}
-                            value={userData.height || ''}
-                            onChangeText={(text) => handleInputChange('height', text)}
-                            keyboardType="numeric"
-                            editable={isEditMode}
-                        />
-                    </View>
-                    {heightError ? <Text style={styles.errorText}>{heightError}</Text> : null}
-
-                    <TouchableOpacity onPress={convertMetrics} style={styles.convertButton}>
-                        <Text style={styles.convertButtonText}>Convert</Text>
-                    </TouchableOpacity>
+                <Text style={styles.label}>Weight (Kg):</Text>
+                <View style={styles.inputContainer}>
+                    <Icon name="fitness-center" size={20} color="#6A0CAD" />
+                    <TextInput
+                        style={styles.input}
+                        value={userData.weight || ''}
+                        onChangeText={(text) => handleInputChange('weight', text)}
+                        keyboardType="numeric"
+                        editable={isEditMode}
+                    />
                 </View>
+                {weightError ? <Text style={styles.errorText}>{weightError}</Text> : null}
+
+                <Text style={styles.label}>Height (Cm):</Text>
+                <View style={styles.inputContainer}>
+                    <Icon name="height" size={20} color="#6A0CAD" />
+                    <TextInput
+                        style={styles.input}
+                        value={userData.height || ''}
+                        onChangeText={(text) => handleInputChange('height', text)}
+                        keyboardType="numeric"
+                        editable={isEditMode}
+                    />
+                </View>
+                {heightError ? <Text style={styles.errorText}>{heightError}</Text> : null}
 
                 <Text style={styles.label}>Address:</Text>
                 <View style={styles.inputContainer}>
@@ -288,10 +273,25 @@ const MyProfile: React.FC<MyProfileProps> = ({ userId }) => {
                         style={styles.input}
                         value={userData.address || ''}
                         onChangeText={(text) => handleInputChange('address', text)}
+                        onFocus={handleAddressFocus}
                         editable={isEditMode}
                     />
                 </View>
                 {addressError ? <Text style={styles.errorText}>{addressError}</Text> : null}
+
+                {/* Suggestions List */}
+                {isEditMode && addressSuggestions.length > 0 && (
+                    <FlatList
+                        data={addressSuggestions}
+                        keyExtractor={(item) => item}
+                        renderItem={({ item }) => (
+                            <TouchableOpacity onPress={() => handleAddressSelect(item)}>
+                                <Text style={styles.suggestionText}>{item}</Text>
+                            </TouchableOpacity>
+                        )}
+                        style={styles.suggestionList}
+                    />
+                )}
 
                 {isEditMode && (
                     <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
@@ -362,15 +362,17 @@ const styles = StyleSheet.create({
         padding: 10,
         color: '#000',
     },
-    convertButton: {
-        backgroundColor: '#6A0CAD',
-        padding: 5,
+    suggestionList: {
+        backgroundColor: '#FFFFFF',
         borderRadius: 5,
-        marginTop: 10,
-        alignSelf: 'flex-end',
+        maxHeight: 150,
+        elevation: 1,
+        marginTop: 5,
     },
-    convertButtonText: {
-        color: '#FFFFFF',
+    suggestionText: {
+        padding: 10,
+        fontSize: 16,
+        color: '#000',
     },
     errorText: {
         color: 'red',
